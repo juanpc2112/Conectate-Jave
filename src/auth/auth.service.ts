@@ -1,108 +1,136 @@
 import {
-  ConflictException,
   BadRequestException,
+  ConflictException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { serverResponse } from '../server-response.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
-import { serverResponse } from '../server-response.js';
-
-export interface UserRecord {
-  id: number;
-  name: string;
-  email: string;
-  career: string;
-  semester: number;
-  avatarUrl: string | null;
-  points: number;
-  notesCount: number;
-  passwordHash: string;
-}
+import { User } from './schemas/user.schema.js';
 
 @Injectable()
 export class AuthService {
-  private readonly users: UserRecord[] = [];
-  private nextUserId = 1;
-  register(dto: RegisterDto) {
+  constructor(@InjectModel(User.name) private readonly userModel: Model<User>) {}
+
+  async register(dto: RegisterDto) {
     this.validateRegister(dto);
-    if (this.users.some((user) => user.email === dto.email.toLowerCase())) {
+    const email = dto.email.toLowerCase();
+    if (await this.userModel.exists({ email })) {
       throw new ConflictException('El correo ya está registrado');
     }
 
-    const user: UserRecord = {
-      id: this.nextUserId++,
+    const lastUser = await this.userModel
+      .findOne()
+      .sort({ id: -1 })
+      .select({ id: 1 })
+      .lean()
+      .exec();
+    const id = (lastUser?.id ?? 0) + 1;
+    const user = await this.userModel.create({
+      id,
       name: dto.name.trim(),
-      email: dto.email.toLowerCase(),
+      email,
       career: dto.career.trim(),
       semester: dto.semester,
       avatarUrl: null,
       points: 0,
       notesCount: 0,
       passwordHash: this.hashPassword(dto.password),
-    };
-    this.users.push(user);
+    });
     return serverResponse(this.toPublicUser(user), 'Usuario creado exitosamente', 201);
   }
 
-  login(dto: LoginDto) {
+  async login(dto: LoginDto) {
     this.validateLogin(dto);
-    const user = this.users.find(
-      (candidate) => candidate.email === dto.email.toLowerCase(),
-    );
+    const user = await this.userModel
+      .findOne({ email: dto.email.toLowerCase() })
+      .select('+passwordHash')
+      .exec();
     if (!user || !this.verifyPassword(dto.password, user.passwordHash)) {
       throw new UnauthorizedException('Correo o contraseña incorrectos');
     }
     return serverResponse(this.toPublicUser(user), 'Inicio de sesión exitoso');
   }
 
-  findUser(id: number): UserRecord {
-    const user = this.users.find((candidate) => candidate.id === id);
+  async findUser(id: number) {
+    const user = await this.userModel.findOne({ id }).exec();
     if (!user) throw new UnauthorizedException('Usuario no válido');
     return user;
   }
 
-  getPublicUser(id: number) {
-    return serverResponse(this.toPublicUser(this.findUser(id)), 'Usuario encontrado exitosamente');
+  async getPublicUser(id: number) {
+    return serverResponse(
+      this.toPublicUser(await this.findUser(id)),
+      'Usuario encontrado exitosamente',
+    );
   }
 
-  getPublicUsers() {
-    return serverResponse(this.users.map((user) => this.toPublicUser(user)), 'Usuarios encontrados exitosamente');
+  async getPublicUsers() {
+    const users = await this.userModel.find().sort({ id: 1 }).exec();
+    return serverResponse(
+      users.map((user) => this.toPublicUser(user)),
+      'Usuarios encontrados exitosamente',
+    );
   }
 
-  addNotePoints(id: number) {
-    const user = this.findUser(id);
-    user.points += 10;
-    user.notesCount += 1;
+  async addNotePoints(id: number) {
+    const user = await this.userModel
+      .findOneAndUpdate(
+        { id },
+        { $inc: { points: 10, notesCount: 1 } },
+        { new: true },
+      )
+      .exec();
+    if (!user) throw new UnauthorizedException('Usuario no válido');
   }
 
-  getRanking(limit: number) {
-    return this.users
-      .toSorted((a, b) => b.points - a.points || a.id - b.id)
-      .slice(0, limit)
-      .map((user, index) => ({
-        position: index + 1,
-        id: user.id,
-        name: user.name,
-        points: user.points,
-        notesCount: user.notesCount,
-      }));
+  async getRanking(limit: number) {
+    const users = await this.userModel
+      .find()
+      .sort({ points: -1, id: 1 })
+      .limit(limit)
+      .exec();
+    return users.map((user, index) => ({
+      position: index + 1,
+      id: user.id,
+      name: user.name,
+      points: user.points,
+      notesCount: user.notesCount,
+    }));
   }
 
-  updateUser(id: number, changes: Partial<Pick<UserRecord, 'name' | 'career' | 'semester' | 'avatarUrl'>>) {
-    const user = this.findUser(id);
+  async updateUser(
+    id: number,
+    changes: Partial<Pick<User, 'name' | 'career' | 'semester' | 'avatarUrl'>>,
+  ) {
     if (changes.name !== undefined && !changes.name.trim()) {
       throw new BadRequestException('El nombre no puede estar vacío');
     }
     if (changes.career !== undefined && !changes.career.trim()) {
       throw new BadRequestException('La carrera no puede estar vacía');
     }
-    if (changes.semester !== undefined && (!Number.isInteger(changes.semester) || changes.semester < 1)) {
+    if (
+      changes.semester !== undefined &&
+      (!Number.isInteger(changes.semester) || changes.semester < 1)
+    ) {
       throw new BadRequestException('El semestre debe ser un entero positivo');
     }
-    Object.assign(user, changes);
+
+    const user = await this.userModel
+      .findOneAndUpdate({ id }, changes, { new: true, runValidators: true })
+      .exec();
+    if (!user) throw new UnauthorizedException('Usuario no válido');
     return serverResponse(this.toPublicUser(user), 'Usuario actualizado exitosamente');
+  }
+
+  async deleteUser(id: number) {
+    const user = await this.userModel.findOneAndDelete({ id }).exec();
+    if (!user) throw new UnauthorizedException('Usuario no válido');
+    return serverResponse(null, 'Usuario eliminado exitosamente');
   }
 
   private validateRegister(dto: RegisterDto): void {
@@ -143,8 +171,16 @@ export class AuthService {
     return expected.length === actual.length && timingSafeEqual(expected, actual);
   }
 
-  private toPublicUser(user: UserRecord) {
-    const { passwordHash: _passwordHash, ...publicUser } = user;
-    return publicUser;
+  private toPublicUser(user: User) {
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      career: user.career,
+      semester: user.semester,
+      avatarUrl: user.avatarUrl,
+      points: user.points,
+      notesCount: user.notesCount,
+    };
   }
 }

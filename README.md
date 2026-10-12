@@ -35,7 +35,13 @@ $ npm install
 
 El registro y el inicio de sesión devuelven el usuario con su ID. Para llamar una ruta protegida, envía su ID en el encabezado `x-user-id`. Por ejemplo, si el usuario tiene ID `1`, usa `x-user-id: 1`.
 
+Para eliminar la cuenta identificada por ese encabezado, envía `DELETE http://localhost:3000/api/v1/users/me`.
+
 Esta forma sirve para practicar, pero no comprueba la identidad de quien envía el ID. No se debe usar en una aplicación publicada.
+
+## MongoDB
+
+Los usuarios se guardan en MongoDB. Por defecto, el proyecto se conecta a `mongodb://127.0.0.1:27017/conectate_jave`; asegúrate de que MongoDB esté iniciado antes de ejecutar el backend. Para usar otra dirección, configura la variable de entorno `MONGODB_URI`.
 
 ## Compile and run the project
 

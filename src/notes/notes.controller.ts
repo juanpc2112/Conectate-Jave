@@ -32,7 +32,7 @@ export class SubjectNotesController {
   ) {
     return this.notesService.findBySubject(subjectId, String(req.user.id));
   }
-  @Post() create(
+  @Post() async create(
     @Param('subjectId') subjectId: string,
     @Req() req: AuthenticatedRequest,
     @Body() dto: CreateNoteDto,
@@ -40,7 +40,7 @@ export class SubjectNotesController {
     return this.notesService.create(
       subjectId,
       String(req.user.id),
-      this.authService.findUser(req.user.id).name,
+      (await this.authService.findUser(req.user.id)).name,
       dto,
     );
   }

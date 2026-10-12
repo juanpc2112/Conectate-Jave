@@ -10,7 +10,7 @@ import { AuthService } from './auth.service.js';
 export class AuthGuard implements CanActivate {
   constructor(private readonly authService: AuthService) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<{
       headers: { 'x-user-id'?: string };
       user?: { id: number };
@@ -19,7 +19,7 @@ export class AuthGuard implements CanActivate {
     if (!Number.isInteger(id) || id < 1) {
       throw new UnauthorizedException('Se requiere el encabezado x-user-id con el ID del usuario');
     }
-    this.authService.findUser(id);
+    await this.authService.findUser(id);
     request.user = { id };
     return true;
   }

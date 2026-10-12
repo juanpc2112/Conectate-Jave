@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -12,6 +13,9 @@ import { SettingsModule } from './settings/settings.module.js';
 
 @Module({
   imports: [
+    MongooseModule.forRoot(
+      process.env.MONGODB_URI ?? 'mongodb://127.0.0.1:27017/conectate_jave',
+    ),
     AuthModule,
     UsersModule,
     SubjectsModule,

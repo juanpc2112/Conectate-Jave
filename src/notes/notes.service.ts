@@ -74,7 +74,7 @@ export class NotesService {
   findOne(id: string, userId: string) {
     return serverResponse(this.toResponse(this.findRecord(id), userId), 'Apunte encontrado exitosamente');
   }
-  create(
+  async create(
     subjectId: string,
     userId: string,
     authorName: string,
@@ -97,7 +97,7 @@ export class NotesService {
       bookmarks: new Set(),
     };
     this.notes.push(note);
-    this.authService.addNotePoints(Number(userId));
+    await this.authService.addNotePoints(Number(userId));
     return serverResponse(this.toResponse(note, userId), 'Apunte creado exitosamente', 201);
   }
   update(id: string, userId: string, dto: CreateNoteDto) {

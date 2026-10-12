@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Put, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Put, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 import { UsersService } from './users.service.js';
@@ -23,6 +23,11 @@ export class UsersController {
     @Body() changes: UpdateUserDto,
   ) {
     return this.usersService.updateMe(request.user.id, changes);
+  }
+
+  @Delete()
+  deleteMe(@Req() request: AuthenticatedRequest) {
+    return this.usersService.deleteMe(request.user.id);
   }
 
   @Get('points')
