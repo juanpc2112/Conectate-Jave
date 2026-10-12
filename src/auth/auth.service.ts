@@ -4,12 +4,13 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
+import { serverResponse } from '../server-response.js';
 
 export interface UserRecord {
-  id: string;
+  id: number;
   name: string;
   email: string;
   career: string;
@@ -23,9 +24,7 @@ export interface UserRecord {
 @Injectable()
 export class AuthService {
   private readonly users: UserRecord[] = [];
-  private readonly secret =
-    process.env.JWT_SECRET ?? 'development-only-change-this-secret';
-
+  private nextUserId = 1;
   register(dto: RegisterDto) {
     this.validateRegister(dto);
     if (this.users.some((user) => user.email === dto.email.toLowerCase())) {
@@ -33,7 +32,7 @@ export class AuthService {
     }
 
     const user: UserRecord = {
-      id: `user_${randomBytes(6).toString('hex')}`,
+      id: this.nextUserId++,
       name: dto.name.trim(),
       email: dto.email.toLowerCase(),
       career: dto.career.trim(),
@@ -44,7 +43,7 @@ export class AuthService {
       passwordHash: this.hashPassword(dto.password),
     };
     this.users.push(user);
-    return { token: this.createToken(user.id), user: this.toPublicUser(user) };
+    return serverResponse(this.toPublicUser(user), 'Usuario creado exitosamente', 201);
   }
 
   login(dto: LoginDto) {
@@ -55,20 +54,24 @@ export class AuthService {
     if (!user || !this.verifyPassword(dto.password, user.passwordHash)) {
       throw new UnauthorizedException('Correo o contraseña incorrectos');
     }
-    return { token: this.createToken(user.id), user: this.toPublicUser(user) };
+    return serverResponse(this.toPublicUser(user), 'Inicio de sesión exitoso');
   }
 
-  findUser(id: string): UserRecord {
+  findUser(id: number): UserRecord {
     const user = this.users.find((candidate) => candidate.id === id);
     if (!user) throw new UnauthorizedException('Usuario no válido');
     return user;
   }
 
-  getPublicUser(id: string) {
-    return this.toPublicUser(this.findUser(id));
+  getPublicUser(id: number) {
+    return serverResponse(this.toPublicUser(this.findUser(id)), 'Usuario encontrado exitosamente');
   }
 
-  updateUser(id: string, changes: Partial<Pick<UserRecord, 'name' | 'career' | 'semester' | 'avatarUrl'>>) {
+  getPublicUsers() {
+    return serverResponse(this.users.map((user) => this.toPublicUser(user)), 'Usuarios encontrados exitosamente');
+  }
+
+  updateUser(id: number, changes: Partial<Pick<UserRecord, 'name' | 'career' | 'semester' | 'avatarUrl'>>) {
     const user = this.findUser(id);
     if (changes.name !== undefined && !changes.name.trim()) {
       throw new BadRequestException('El nombre no puede estar vacío');
@@ -80,31 +83,7 @@ export class AuthService {
       throw new BadRequestException('El semestre debe ser un entero positivo');
     }
     Object.assign(user, changes);
-    return this.toPublicUser(user);
-  }
-
-  validateToken(token: string): string | null {
-    const [header, payload, signature, extra] = token.split('.');
-    if (!header || !payload || !signature || extra) return null;
-    const expected = this.sign(`${header}.${payload}`);
-    const receivedBuffer = Buffer.from(signature);
-    const expectedBuffer = Buffer.from(expected);
-    if (
-      receivedBuffer.length !== expectedBuffer.length ||
-      !timingSafeEqual(receivedBuffer, expectedBuffer)
-    ) return null;
-
-    try {
-      const claims = JSON.parse(Buffer.from(payload, 'base64url').toString()) as {
-        sub: string;
-        exp: number;
-      };
-      if (claims.exp <= Math.floor(Date.now() / 1000)) return null;
-      this.findUser(claims.sub);
-      return claims.sub;
-    } catch {
-      return null;
-    }
+    return serverResponse(this.toPublicUser(user), 'Usuario actualizado exitosamente');
   }
 
   private validateRegister(dto: RegisterDto): void {
@@ -143,21 +122,6 @@ export class AuthService {
     const expected = Buffer.from(hash, 'hex');
     const actual = scryptSync(password, salt, expected.length);
     return expected.length === actual.length && timingSafeEqual(expected, actual);
-  }
-
-  private createToken(userId: string): string {
-    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-    const payload = Buffer.from(JSON.stringify({
-      sub: userId,
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
-    })).toString('base64url');
-    const content = `${header}.${payload}`;
-    return `${content}.${this.sign(content)}`;
-  }
-
-  private sign(content: string): string {
-    return createHmac('sha256', this.secret).update(content).digest('base64url');
   }
 
   private toPublicUser(user: UserRecord) {

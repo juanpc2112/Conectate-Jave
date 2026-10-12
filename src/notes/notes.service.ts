@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { CreateNoteDto } from './dto/create-note.dto.js';
 import { RateNoteDto } from './dto/rate-note.dto.js';
+import { serverResponse } from '../server-response.js';
 
 interface NoteRecord {
   id: string;
@@ -58,17 +59,17 @@ export class NotesService {
 
   findBySubject(subjectId: string, userId: string) {
     this.ensureSubject(subjectId);
-    return this.notes
+    return serverResponse(this.notes
       .filter((note) => note.subjectId === subjectId)
-      .map((note) => this.toResponse(note, userId));
+      .map((note) => this.toResponse(note, userId)), 'Apuntes encontrados exitosamente');
   }
   findBookmarks(userId: string) {
-    return this.notes
+    return serverResponse(this.notes
       .filter((note) => note.bookmarks.has(userId))
-      .map((note) => this.toResponse(note, userId));
+      .map((note) => this.toResponse(note, userId)), 'Apuntes guardados encontrados exitosamente');
   }
   findOne(id: string, userId: string) {
-    return this.toResponse(this.findRecord(id), userId);
+    return serverResponse(this.toResponse(this.findRecord(id), userId), 'Apunte encontrado exitosamente');
   }
   create(
     subjectId: string,
@@ -93,7 +94,7 @@ export class NotesService {
       bookmarks: new Set(),
     };
     this.notes.push(note);
-    return this.toResponse(note, userId);
+    return serverResponse(this.toResponse(note, userId), 'Apunte creado exitosamente', 201);
   }
   update(id: string, userId: string, dto: CreateNoteDto) {
     const note = this.findRecord(id);
@@ -101,12 +102,13 @@ export class NotesService {
     this.validate(dto);
     note.title = dto.title.trim();
     note.fileUrl = dto.fileUrl.trim();
-    return this.toResponse(note, userId);
+    return serverResponse(this.toResponse(note, userId), 'Apunte actualizado exitosamente');
   }
   remove(id: string, userId: string) {
     const note = this.findRecord(id);
     this.ensureOwner(note, userId);
     this.notes.splice(this.notes.indexOf(note), 1);
+    return serverResponse(null, 'Apunte eliminado exitosamente');
   }
   rate(id: string, userId: string, dto: RateNoteDto) {
     const note = this.findRecord(id);
@@ -123,13 +125,15 @@ export class NotesService {
           10,
       ) / 10;
     note.featured = note.averageRating >= 4;
-    return this.toResponse(note, userId);
+    return serverResponse(this.toResponse(note, userId), 'Calificación guardada exitosamente');
   }
   bookmark(id: string, userId: string) {
     this.findRecord(id).bookmarks.add(userId);
+    return serverResponse(null, 'Apunte guardado exitosamente');
   }
   unbookmark(id: string, userId: string) {
     this.findRecord(id).bookmarks.delete(userId);
+    return serverResponse(null, 'Apunte quitado de guardados exitosamente');
   }
   ranking(limit: number) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 100)
@@ -149,11 +153,11 @@ export class NotesService {
   }
   search(query: string, userId: string) {
     const term = query.toLocaleLowerCase();
-    return this.notes
+    return serverResponse(this.notes
       .filter((note) =>
         `${note.title} ${note.authorName}`.toLocaleLowerCase().includes(term),
       )
-      .map((note) => this.toResponse(note, userId));
+      .map((note) => this.toResponse(note, userId)), 'Resultados encontrados exitosamente');
   }
 
   private findRecord(id: string) {

@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { NotificationSettingsDto } from './dto/notification-settings.dto.js';
 import { PrivacySettingsDto } from './dto/privacy-settings.dto.js';
+import { serverResponse } from '../server-response.js';
 
 @Injectable()
 export class SettingsService {
@@ -9,8 +10,8 @@ export class SettingsService {
     NotificationSettingsDto
   >();
   private readonly privacySettings = new Map<string, PrivacySettingsDto>();
-  getNotifications(userId: string): NotificationSettingsDto {
-    return (
+  getNotifications(userId: string) {
+    return serverResponse((
       this.notificationSettings.get(userId) ?? {
         messages: true,
         groups: true,
@@ -19,7 +20,7 @@ export class SettingsService {
         messagePreview: true,
         vibration: false,
       }
-    );
+    ), 'Preferencias de notificación encontradas exitosamente');
   }
   updateNotifications(userId: string, dto: NotificationSettingsDto) {
     const keys: (keyof NotificationSettingsDto)[] = [
@@ -38,10 +39,10 @@ export class SettingsService {
       keys.map((key) => [key, dto[key]]),
     ) as unknown as NotificationSettingsDto;
     this.notificationSettings.set(userId, settings);
-    return settings;
+    return serverResponse(settings, 'Preferencias de notificación actualizadas exitosamente');
   }
-  getPrivacy(userId: string): PrivacySettingsDto {
-    return (
+  getPrivacy(userId: string) {
+    return serverResponse((
       this.privacySettings.get(userId) ?? {
         lastSeen: 'everyone',
         profilePhoto: 'contacts',
@@ -49,7 +50,7 @@ export class SettingsService {
         whoCanAddToGroups: 'contacts',
         readReceipts: true,
       }
-    );
+    ), 'Preferencias de privacidad encontradas exitosamente');
   }
   updatePrivacy(userId: string, dto: PrivacySettingsDto) {
     const visibility = ['everyone', 'contacts', 'nobody'];
@@ -63,6 +64,6 @@ export class SettingsService {
     )
       throw new BadRequestException('Preferencias de privacidad inválidas');
     this.privacySettings.set(userId, dto);
-    return dto;
+    return serverResponse(dto, 'Preferencias de privacidad actualizadas exitosamente');
   }
 }

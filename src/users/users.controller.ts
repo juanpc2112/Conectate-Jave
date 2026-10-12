@@ -4,7 +4,7 @@ import { UpdateUserDto } from './dto/update-user.dto.js';
 import { UsersService } from './users.service.js';
 
 interface AuthenticatedRequest {
-  user: { id: string };
+  user: { id: number };
 }
 
 @Controller('users/me')
@@ -28,5 +28,16 @@ export class UsersController {
   @Get('points')
   getPoints(@Req() request: AuthenticatedRequest) {
     return this.usersService.getPoints(request.user.id);
+  }
+}
+
+@Controller('users')
+@UseGuards(AuthGuard)
+export class UsersListController {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Get()
+  findAll() {
+    return this.usersService.findAll();
   }
 }

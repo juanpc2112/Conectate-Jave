@@ -4,7 +4,7 @@ import { SearchService } from './search.service.js';
 import { SearchQueryDto } from './dto/search-query.dto.js';
 
 interface AuthenticatedRequest {
-  user: { id: string };
+  user: { id: number };
 }
 
 @Controller('search')
@@ -15,6 +15,6 @@ export class SearchController {
     @Query() query: SearchQueryDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.searchService.search(query, req.user.id);
+    return this.searchService.search(query, String(req.user.id));
   }
 }

@@ -3,8 +3,6 @@ import {
   Controller,
   Delete,
   Get,
-  HttpCode,
-  HttpStatus,
   Param,
   Post,
   Put,
@@ -18,7 +16,7 @@ import { CreateNoteDto } from './dto/create-note.dto.js';
 import { RateNoteDto } from './dto/rate-note.dto.js';
 
 interface AuthenticatedRequest {
-  user: { id: string };
+  user: { id: number };
 }
 
 @Controller('subjects/:subjectId/notes')
@@ -32,7 +30,7 @@ export class SubjectNotesController {
     @Param('subjectId') subjectId: string,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.notesService.findBySubject(subjectId, req.user.id);
+    return this.notesService.findBySubject(subjectId, String(req.user.id));
   }
   @Post() create(
     @Param('subjectId') subjectId: string,
@@ -41,7 +39,7 @@ export class SubjectNotesController {
   ) {
     return this.notesService.create(
       subjectId,
-      req.user.id,
+      String(req.user.id),
       this.authService.findUser(req.user.id).name,
       dto,
     );
@@ -56,39 +54,39 @@ export class NotesController {
     @Param('noteId') id: string,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.notesService.findOne(id, req.user.id);
+    return this.notesService.findOne(id, String(req.user.id));
   }
   @Put(':noteId') update(
     @Param('noteId') id: string,
     @Req() req: AuthenticatedRequest,
     @Body() dto: CreateNoteDto,
   ) {
-    return this.notesService.update(id, req.user.id, dto);
+    return this.notesService.update(id, String(req.user.id), dto);
   }
-  @Delete(':noteId') @HttpCode(HttpStatus.NO_CONTENT) remove(
+  @Delete(':noteId') remove(
     @Param('noteId') id: string,
     @Req() req: AuthenticatedRequest,
   ) {
-    this.notesService.remove(id, req.user.id);
+    this.notesService.remove(id, String(req.user.id));
   }
   @Post(':noteId/ratings') rate(
     @Param('noteId') id: string,
     @Req() req: AuthenticatedRequest,
     @Body() dto: RateNoteDto,
   ) {
-    return this.notesService.rate(id, req.user.id, dto);
+    return this.notesService.rate(id, String(req.user.id), dto);
   }
-  @Post(':noteId/bookmark') @HttpCode(HttpStatus.NO_CONTENT) bookmark(
+  @Post(':noteId/bookmark') bookmark(
     @Param('noteId') id: string,
     @Req() req: AuthenticatedRequest,
   ) {
-    this.notesService.bookmark(id, req.user.id);
+    this.notesService.bookmark(id, String(req.user.id));
   }
-  @Delete(':noteId/bookmark') @HttpCode(HttpStatus.NO_CONTENT) unbookmark(
+  @Delete(':noteId/bookmark') unbookmark(
     @Param('noteId') id: string,
     @Req() req: AuthenticatedRequest,
   ) {
-    this.notesService.unbookmark(id, req.user.id);
+    this.notesService.unbookmark(id, String(req.user.id));
   }
 }
 
@@ -97,6 +95,6 @@ export class NotesController {
 export class BookmarksController {
   constructor(private readonly notesService: NotesService) {}
   @Get() findBookmarks(@Req() req: AuthenticatedRequest) {
-    return this.notesService.findBookmarks(req.user.id);
+    return this.notesService.findBookmarks(String(req.user.id));
   }
 }

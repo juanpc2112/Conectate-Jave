@@ -14,7 +14,7 @@ import { MessageQueryDto } from './dto/message-query.dto.js';
 import { SendMessageDto } from './dto/send-message.dto.js';
 
 interface AuthenticatedRequest {
-  user: { id: string };
+  user: { id: number };
 }
 
 @Controller('chats')
@@ -35,6 +35,6 @@ export class ChatsController {
     @Req() request: AuthenticatedRequest,
     @Body() dto: SendMessageDto,
   ) {
-    return this.chatsService.createMessage(chatId, request.user.id, dto);
+    return this.chatsService.createMessage(chatId, String(request.user.id), dto);
   }
 }

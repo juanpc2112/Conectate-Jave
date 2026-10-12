@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { MessageQueryDto } from './dto/message-query.dto.js';
 import { SendMessageDto } from './dto/send-message.dto.js';
+import { serverResponse } from '../server-response.js';
 
 export interface ChatMessage {
   id: string;
@@ -38,7 +39,7 @@ export class ChatsService {
   private idCounter = 1;
 
   findAll() {
-    return [
+    return serverResponse([
       {
         id: 'chat_101',
         subjectId: 'subj_101',
@@ -55,7 +56,7 @@ export class ChatsService {
         unreadCount: this.unread('chat_102'),
         lastMessage: this.lastMessage('chat_102'),
       },
-    ];
+    ], 'Chats encontrados exitosamente');
   }
 
   findMessages(chatId: string, query: MessageQueryDto) {
@@ -72,9 +73,9 @@ export class ChatsService {
       throw new BadRequestException(
         'page y pageSize deben ser enteros positivos (máximo 100)',
       );
-    return [...(this.messages.get(chatId) ?? [])]
+    return serverResponse([...(this.messages.get(chatId) ?? [])]
       .reverse()
-      .slice((page - 1) * pageSize, page * pageSize);
+      .slice((page - 1) * pageSize, page * pageSize), 'Mensajes encontrados exitosamente');
   }
 
   createMessage(chatId: string, userId: string, dto: SendMessageDto) {
@@ -91,7 +92,7 @@ export class ChatsService {
       read: true,
     };
     this.messages.get(chatId)!.push(message);
-    return message;
+    return serverResponse(message, 'Mensaje enviado exitosamente', 201);
   }
 
   private ensureChat(id: string) {

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ServerResponse } from '../common/server-response.js';
+import { serverResponse } from '../server-response.js';
 import { SubjectDto } from './dto/subject.dto.js';
 
 @Injectable()
@@ -25,19 +25,19 @@ export class SubjectsService {
     },
   ];
 
-  findAll(): ServerResponse<SubjectDto[]> {
+  findAll() {
     const status = this.subjects.length > 0 ? 200 : 404;
     const message =
       status === 200
         ? 'Materias encontradas exitosamente'
         : 'No se encontraron materias';
 
-    return new ServerResponse(this.subjects, status, message);
+    return serverResponse(this.subjects, message, status);
   }
 
-  findOne(id: string): ServerResponse<SubjectDto> {
+  findOne(id: string) {
     const subject = this.subjects.find((item) => item.id === id);
     if (!subject) throw new NotFoundException('La materia solicitada no existe');
-    return new ServerResponse(subject, 200, 'Materia encontrada exitosamente');
+    return serverResponse(subject, 'Materia encontrada exitosamente');
   }
 }

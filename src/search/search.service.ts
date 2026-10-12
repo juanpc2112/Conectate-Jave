@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ChatsService } from '../chats/chats.service.js';
 import { NotesService } from '../notes/notes.service.js';
 import { SearchQueryDto } from './dto/search-query.dto.js';
+import { serverResponse } from '../server-response.js';
 
 @Injectable()
 export class SearchService {
@@ -16,18 +17,18 @@ export class SearchService {
     if (!['chats', 'notes', 'all'].includes(type))
       throw new BadRequestException('type debe ser chats, notes o all');
     const term = q.toLocaleLowerCase();
-    return {
+    return serverResponse({
       chats:
         type === 'notes'
           ? []
           : this.chatsService
-              .findAll()
+              .findAll().data
               .filter((chat) =>
                 `${chat.subjectName} ${chat.professor}`
                   .toLocaleLowerCase()
                   .includes(term),
               ),
       notes: type === 'chats' ? [] : this.notesService.search(term, userId),
-    };
+    }, 'Búsqueda realizada exitosamente');
   }
 }

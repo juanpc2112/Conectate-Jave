@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { serverResponse } from './server-response.js';
 
 @Injectable()
 export class AppService {
-  getHello(): string {
-    return 'Hello World!';
+  getHello() {
+    return serverResponse('Hello World!', 'Servidor disponible');
   }
 }
 

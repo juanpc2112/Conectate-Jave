@@ -12,15 +12,14 @@ export class AuthGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<{
-      headers: { authorization?: string };
-      user?: { id: string };
+      headers: { 'x-user-id'?: string };
+      user?: { id: number };
     }>();
-    const [scheme, token] = request.headers.authorization?.split(' ') ?? [];
-    if (scheme !== 'Bearer' || !token) {
-      throw new UnauthorizedException('Se requiere un token Bearer');
+    const id = Number(request.headers['x-user-id']);
+    if (!Number.isInteger(id) || id < 1) {
+      throw new UnauthorizedException('Se requiere el encabezado x-user-id con el ID del usuario');
     }
-    const id = this.authService.validateToken(token);
-    if (!id) throw new UnauthorizedException('Token inválido o expirado');
+    this.authService.findUser(id);
     request.user = { id };
     return true;
   }

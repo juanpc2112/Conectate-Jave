@@ -31,6 +31,12 @@
 $ npm install
 ```
 
+## Acceso a rutas protegidas
+
+El registro y el inicio de sesión devuelven el usuario con su ID. Para llamar una ruta protegida, envía su ID en el encabezado `x-user-id`. Por ejemplo, si el usuario tiene ID `1`, usa `x-user-id: 1`.
+
+Esta forma sirve para practicar, pero no comprueba la identidad de quien envía el ID. No se debe usar en una aplicación publicada.
+
 ## Compile and run the project
 
 ```bash

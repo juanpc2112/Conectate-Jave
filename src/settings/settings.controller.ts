@@ -5,7 +5,7 @@ import { NotificationSettingsDto } from './dto/notification-settings.dto.js';
 import { PrivacySettingsDto } from './dto/privacy-settings.dto.js';
 
 interface AuthenticatedRequest {
-  user: { id: string };
+  user: { id: number };
 }
 
 @Controller('users/me')
@@ -15,21 +15,21 @@ export class SettingsController {
   @Get('notification-settings') getNotifications(
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.settingsService.getNotifications(req.user.id);
+    return this.settingsService.getNotifications(String(req.user.id));
   }
   @Put('notification-settings') updateNotifications(
     @Req() req: AuthenticatedRequest,
     @Body() dto: NotificationSettingsDto,
   ) {
-    return this.settingsService.updateNotifications(req.user.id, dto);
+    return this.settingsService.updateNotifications(String(req.user.id), dto);
   }
   @Get('privacy-settings') getPrivacy(@Req() req: AuthenticatedRequest) {
-    return this.settingsService.getPrivacy(req.user.id);
+    return this.settingsService.getPrivacy(String(req.user.id));
   }
   @Put('privacy-settings') updatePrivacy(
     @Req() req: AuthenticatedRequest,
     @Body() dto: PrivacySettingsDto,
   ) {
-    return this.settingsService.updatePrivacy(req.user.id, dto);
+    return this.settingsService.updatePrivacy(String(req.user.id), dto);
   }
 }
