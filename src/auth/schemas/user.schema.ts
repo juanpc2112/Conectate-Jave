@@ -20,7 +20,7 @@ export class User {
   @Prop({ required: true, min: 1 })
   semester!: number;
 
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   avatarUrl!: string | null;
 
   @Prop({ default: 0, min: 0 })
