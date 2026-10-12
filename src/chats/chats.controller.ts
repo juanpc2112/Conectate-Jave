@@ -12,6 +12,7 @@ import { AuthGuard } from '../auth/auth.guard.js';
 import { ChatsService } from './chats.service.js';
 import { MessageQueryDto } from './dto/message-query.dto.js';
 import { SendMessageDto } from './dto/send-message.dto.js';
+import { CreateChatDto } from './dto/create-chat.dto.js';
 
 interface AuthenticatedRequest {
   user: { id: number };
@@ -21,6 +22,12 @@ interface AuthenticatedRequest {
 @UseGuards(AuthGuard)
 export class ChatsController {
   constructor(private readonly chatsService: ChatsService) {}
+
+  @Post()
+  createChat(@Body() dto: CreateChatDto) {
+    return this.chatsService.createChat(dto);
+  }
+
   @Get() findAll() {
     return this.chatsService.findAll();
   }

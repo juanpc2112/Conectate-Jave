@@ -5,7 +5,16 @@ import {
 } from '@nestjs/common';
 import { MessageQueryDto } from './dto/message-query.dto.js';
 import { SendMessageDto } from './dto/send-message.dto.js';
+import { CreateChatDto } from './dto/create-chat.dto.js';
+import { SubjectsService } from '../subjects/subjects.service.js';
 import { serverResponse } from '../server-response.js';
+
+export interface Chat {
+  id: string;
+  subjectId: string;
+  subjectName: string;
+  professor: string;
+}
 
 export interface ChatMessage {
   id: string;
@@ -19,6 +28,10 @@ export interface ChatMessage {
 
 @Injectable()
 export class ChatsService {
+  private readonly chats = new Map<string, Chat>([
+    ['chat_101', { id: 'chat_101', subjectId: 'subj_101', subjectName: 'Programación Computacional', professor: 'Prof. Horacio Gómez' }],
+    ['chat_102', { id: 'chat_102', subjectId: 'subj_102', subjectName: 'Cálculo Diferencial', professor: 'Prof. Sara Martínez' }],
+  ]);
   private readonly messages = new Map<string, ChatMessage[]>([
     [
       'chat_101',
@@ -36,27 +49,34 @@ export class ChatsService {
     ],
     ['chat_102', []],
   ]);
-  private idCounter = 1;
+  private idCounter = 103;
+
+  constructor(private readonly subjectsService: SubjectsService) {}
+
+  createChat(dto: CreateChatDto) {
+    if (typeof dto?.subjectId !== 'string' || !dto.subjectId.trim())
+      throw new BadRequestException('El ID de la materia es obligatorio');
+
+    const subject = this.subjectsService.findOne(dto.subjectId.trim()).data;
+    const id = `chat_${this.idCounter++}`;
+    const chat: Chat = {
+      id,
+      subjectId: subject.id,
+      subjectName: subject.name,
+      professor: subject.professor,
+    };
+    this.chats.set(id, chat);
+    this.messages.set(id, []);
+    return serverResponse(chat, 'Chat creado exitosamente', 201);
+  }
 
   findAll() {
-    return serverResponse([
-      {
-        id: 'chat_101',
-        subjectId: 'subj_101',
-        subjectName: 'Programación Computacional',
-        professor: 'Prof. Horacio Gómez',
-        unreadCount: this.unread('chat_101'),
-        lastMessage: this.lastMessage('chat_101'),
-      },
-      {
-        id: 'chat_102',
-        subjectId: 'subj_102',
-        subjectName: 'Cálculo Diferencial',
-        professor: 'Prof. Sara Martínez',
-        unreadCount: this.unread('chat_102'),
-        lastMessage: this.lastMessage('chat_102'),
-      },
-    ], 'Chats encontrados exitosamente');
+    const chats = [...this.chats.values()].map((chat) => ({
+      ...chat,
+      unreadCount: this.unread(chat.id),
+      lastMessage: this.lastMessage(chat.id),
+    }));
+    return serverResponse(chats, 'Chats encontrados exitosamente');
   }
 
   findMessages(chatId: string, query: MessageQueryDto) {

@@ -7,5 +7,6 @@ import { SubjectsService } from './subjects.service.js';
   imports: [AuthModule],
   controllers: [SubjectsController],
   providers: [SubjectsService],
+  exports: [SubjectsService],
 })
 export class SubjectsModule {}
