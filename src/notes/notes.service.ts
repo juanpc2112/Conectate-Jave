@@ -7,6 +7,7 @@ import {
 import { CreateNoteDto } from './dto/create-note.dto.js';
 import { RateNoteDto } from './dto/rate-note.dto.js';
 import { serverResponse } from '../server-response.js';
+import { AuthService } from '../auth/auth.service.js';
 
 interface NoteRecord {
   id: string;
@@ -25,6 +26,8 @@ interface NoteRecord {
 
 @Injectable()
 export class NotesService {
+  constructor(private readonly authService: AuthService) {}
+
   private readonly notes: NoteRecord[] = [
     {
       id: 'note_301',
@@ -94,6 +97,7 @@ export class NotesService {
       bookmarks: new Set(),
     };
     this.notes.push(note);
+    this.authService.addNotePoints(Number(userId));
     return serverResponse(this.toResponse(note, userId), 'Apunte creado exitosamente', 201);
   }
   update(id: string, userId: string, dto: CreateNoteDto) {
@@ -134,22 +138,6 @@ export class NotesService {
   unbookmark(id: string, userId: string) {
     this.findRecord(id).bookmarks.delete(userId);
     return serverResponse(null, 'Apunte quitado de guardados exitosamente');
-  }
-  ranking(limit: number) {
-    if (!Number.isInteger(limit) || limit < 1 || limit > 100)
-      throw new BadRequestException('limit debe ser un entero entre 1 y 100');
-    return [...this.notes]
-      .sort(
-        (a, b) =>
-          b.averageRating - a.averageRating || b.ratingsCount - a.ratingsCount,
-      )
-      .slice(0, limit)
-      .map((note, index) => ({
-        rank: index + 1,
-        studentName: note.authorName,
-        noteTitle: note.title,
-        points: Math.round(note.averageRating * note.ratingsCount * 10),
-      }));
   }
   search(query: string, userId: string) {
     const term = query.toLocaleLowerCase();

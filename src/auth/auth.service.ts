@@ -71,6 +71,25 @@ export class AuthService {
     return serverResponse(this.users.map((user) => this.toPublicUser(user)), 'Usuarios encontrados exitosamente');
   }
 
+  addNotePoints(id: number) {
+    const user = this.findUser(id);
+    user.points += 10;
+    user.notesCount += 1;
+  }
+
+  getRanking(limit: number) {
+    return this.users
+      .toSorted((a, b) => b.points - a.points || a.id - b.id)
+      .slice(0, limit)
+      .map((user, index) => ({
+        position: index + 1,
+        id: user.id,
+        name: user.name,
+        points: user.points,
+        notesCount: user.notesCount,
+      }));
+  }
+
   updateUser(id: number, changes: Partial<Pick<UserRecord, 'name' | 'career' | 'semester' | 'avatarUrl'>>) {
     const user = this.findUser(id);
     if (changes.name !== undefined && !changes.name.trim()) {
