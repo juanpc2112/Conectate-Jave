@@ -8,17 +8,20 @@ export class User {
   @Prop({ required: true, trim: true })
   name!: string;
 
+  @Prop({ required: true, enum: ['student', 'professor'], default: 'student' })
+  role!: 'student' | 'professor';
+
   @Prop({ required: true, unique: true, lowercase: true, trim: true })
   email!: string;
 
   @Prop({ required: true, select: false })
   passwordHash!: string;
 
-  @Prop({ required: true, trim: true })
+  @Prop({ default: '', trim: true })
   career!: string;
 
-  @Prop({ required: true, min: 1 })
-  semester!: number;
+  @Prop({ type: Number, default: null, min: 1 })
+  semester!: number | null;
 
   @Prop({ type: String, default: null })
   avatarUrl!: string | null;

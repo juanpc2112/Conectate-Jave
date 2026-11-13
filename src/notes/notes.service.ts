@@ -4,173 +4,167 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { randomUUID } from 'node:crypto';
+import { Model } from 'mongoose';
+import { AuthService } from '../auth/auth.service.js';
+import { SubjectsService } from '../subjects/subjects.service.js';
+import { serverResponse } from '../server-response.js';
 import { CreateNoteDto } from './dto/create-note.dto.js';
 import { RateNoteDto } from './dto/rate-note.dto.js';
-import { serverResponse } from '../server-response.js';
-import { AuthService } from '../auth/auth.service.js';
-
-interface NoteRecord {
-  id: string;
-  subjectId: string;
-  authorId: string;
-  authorName: string;
-  title: string;
-  fileUrl: string;
-  averageRating: number;
-  ratingsCount: number;
-  featured: boolean;
-  createdAt: string;
-  ratings: number[];
-  bookmarks: Set<string>;
-}
+import { Note } from './schemas/note.schema.js';
 
 @Injectable()
 export class NotesService {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    @InjectModel(Note.name) private readonly noteModel: Model<Note>,
+    private readonly authService: AuthService,
+    private readonly subjectsService: SubjectsService,
+  ) {}
 
-  private readonly notes: NoteRecord[] = [
-    {
-      id: 'note_301',
-      subjectId: 'subj_101',
-      authorId: 'user_demo',
-      authorName: 'Horacio',
-      title: 'Apuntes de Programación',
-      fileUrl: 'https://cdn.conectatejave.co/notes/note_301.pdf',
-      averageRating: 4.5,
-      ratingsCount: 2,
-      featured: true,
-      createdAt: new Date().toISOString(),
-      ratings: [4, 5],
-      bookmarks: new Set(),
-    },
-    {
-      id: 'note_302',
-      subjectId: 'subj_102',
-      authorId: 'user_demo',
-      authorName: 'Sara',
-      title: 'Cálculo diferencial: resumen',
-      fileUrl: 'https://cdn.conectatejave.co/notes/note_302.pdf',
-      averageRating: 4,
-      ratingsCount: 1,
-      featured: true,
-      createdAt: new Date().toISOString(),
-      ratings: [4],
-      bookmarks: new Set(),
-    },
-  ];
-  private idCounter = 1;
+  async findBySubject(subjectId: string, userId: number) {
+    await this.subjectsService.requireMember(subjectId, userId);
+    const notes = await this.noteModel.find({ subjectId }).sort({ createdAt: -1 }).exec();
+    return serverResponse(notes.map((note) => this.toResponse(note, userId)), 'Apuntes encontrados exitosamente');
+  }
 
-  findBySubject(subjectId: string, userId: string) {
-    this.ensureSubject(subjectId);
-    return serverResponse(this.notes
-      .filter((note) => note.subjectId === subjectId)
-      .map((note) => this.toResponse(note, userId)), 'Apuntes encontrados exitosamente');
+  async findBookmarks(userId: number) {
+    const notes = await this.noteModel.find({ bookmarks: userId }).sort({ createdAt: -1 }).exec();
+    return serverResponse(notes.map((note) => this.toResponse(note, userId)), 'Apuntes guardados encontrados exitosamente');
   }
-  findBookmarks(userId: string) {
-    return serverResponse(this.notes
-      .filter((note) => note.bookmarks.has(userId))
-      .map((note) => this.toResponse(note, userId)), 'Apuntes guardados encontrados exitosamente');
+
+  async findOne(id: string, userId: number) {
+    const note = await this.findRecord(id);
+    await this.subjectsService.requireMember(note.subjectId, userId);
+    return serverResponse(this.toResponse(note, userId), 'Apunte encontrado exitosamente');
   }
-  findOne(id: string, userId: string) {
-    return serverResponse(this.toResponse(this.findRecord(id), userId), 'Apunte encontrado exitosamente');
+
+  async getFile(id: string, userId: number) {
+    const note = await this.findRecord(id);
+    await this.subjectsService.requireMember(note.subjectId, userId);
+    return { data: Buffer.from(note.fileData, 'base64'), fileName: note.fileName };
   }
-  async create(
-    subjectId: string,
-    userId: string,
-    authorName: string,
-    dto: CreateNoteDto,
-  ) {
-    this.ensureSubject(subjectId);
-    this.validate(dto);
-    const note: NoteRecord = {
-      id: `note_${this.idCounter++}`,
+
+  async create(subjectId: string, userId: number, dto: CreateNoteDto) {
+    await this.subjectsService.requireMember(subjectId, userId);
+    const user = await this.authService.findUser(userId);
+    if (user.role !== 'student') throw new ForbiddenException('Solo los estudiantes pueden compartir apuntes');
+    const fileData = this.validate(dto);
+    const note = await this.noteModel.create({
+      id: `note_${randomUUID()}`,
       subjectId,
       authorId: userId,
-      authorName,
+      authorName: user.name,
       title: dto.title.trim(),
-      fileUrl: dto.fileUrl.trim(),
-      averageRating: 0,
-      ratingsCount: 0,
-      featured: false,
-      createdAt: new Date().toISOString(),
+      fileName: dto.fileName.trim(),
+      fileData,
       ratings: [],
-      bookmarks: new Set(),
-    };
-    this.notes.push(note);
-    await this.authService.addNotePoints(Number(userId));
+      bookmarks: [],
+    });
+    await this.authService.addNotePoints(userId);
     return serverResponse(this.toResponse(note, userId), 'Apunte creado exitosamente', 201);
   }
-  update(id: string, userId: string, dto: CreateNoteDto) {
-    const note = this.findRecord(id);
+
+  async update(id: string, userId: number, dto: CreateNoteDto) {
+    const note = await this.findRecord(id);
     this.ensureOwner(note, userId);
-    this.validate(dto);
+    await this.subjectsService.requireMember(note.subjectId, userId);
+    const fileData = this.validate(dto);
     note.title = dto.title.trim();
-    note.fileUrl = dto.fileUrl.trim();
+    note.fileName = dto.fileName.trim();
+    note.fileData = fileData;
+    await note.save();
     return serverResponse(this.toResponse(note, userId), 'Apunte actualizado exitosamente');
   }
-  remove(id: string, userId: string) {
-    const note = this.findRecord(id);
+
+  async remove(id: string, userId: number) {
+    const note = await this.findRecord(id);
     this.ensureOwner(note, userId);
-    this.notes.splice(this.notes.indexOf(note), 1);
+    await note.deleteOne();
     return serverResponse(null, 'Apunte eliminado exitosamente');
   }
-  rate(id: string, userId: string, dto: RateNoteDto) {
-    const note = this.findRecord(id);
-    if (!Number.isInteger(dto?.stars) || dto.stars < 1 || dto.stars > 5)
-      throw new BadRequestException(
-        'La calificación debe ser un entero entre 1 y 5',
-      );
-    note.ratings.push(dto.stars);
-    note.ratingsCount = note.ratings.length;
-    note.averageRating =
-      Math.round(
-        (note.ratings.reduce((sum, value) => sum + value, 0) /
-          note.ratingsCount) *
-          10,
-      ) / 10;
-    note.featured = note.averageRating >= 4;
-    return serverResponse(this.toResponse(note, userId), 'Calificación guardada exitosamente');
-  }
-  bookmark(id: string, userId: string) {
-    this.findRecord(id).bookmarks.add(userId);
-    return serverResponse(null, 'Apunte guardado exitosamente');
-  }
-  unbookmark(id: string, userId: string) {
-    this.findRecord(id).bookmarks.delete(userId);
-    return serverResponse(null, 'Apunte quitado de guardados exitosamente');
-  }
-  search(query: string, userId: string) {
-    const term = query.toLocaleLowerCase();
-    return serverResponse(this.notes
-      .filter((note) =>
-        `${note.title} ${note.authorName}`.toLocaleLowerCase().includes(term),
-      )
-      .map((note) => this.toResponse(note, userId)), 'Resultados encontrados exitosamente');
+
+  async rate(id: string, userId: number, dto: RateNoteDto) {
+    const note = await this.findRecord(id);
+    await this.subjectsService.requireMember(note.subjectId, userId);
+    if (!Number.isInteger(dto?.stars) || dto.stars < 1 || dto.stars > 5) {
+      throw new BadRequestException('La calificación debe ser un entero entre 1 y 5');
+    }
+    if (note.authorId === userId) throw new ForbiddenException('No puedes calificar tu propio apunte');
+    const existing = note.ratings.find((rating) => rating.userId === userId);
+    const pointsDelta = dto.stars - (existing?.stars ?? 0);
+    if (existing) existing.stars = dto.stars;
+    else note.ratings.push({ userId, stars: dto.stars });
+    await note.save();
+    await this.authService.addRatingPoints(note.authorId, pointsDelta);
+    return serverResponse(this.toResponse(note, userId), 'Calificación guardada; los puntos del autor se actualizaron.', 200);
   }
 
-  private findRecord(id: string) {
-    const note = this.notes.find((item) => item.id === id);
+  async bookmark(id: string, userId: number) {
+    const note = await this.findRecord(id);
+    await this.subjectsService.requireMember(note.subjectId, userId);
+    await this.noteModel.updateOne({ id }, { $addToSet: { bookmarks: userId } }).exec();
+    return serverResponse(null, 'Apunte guardado exitosamente');
+  }
+
+  async unbookmark(id: string, userId: number) {
+    const note = await this.findRecord(id);
+    await this.subjectsService.requireMember(note.subjectId, userId);
+    await this.noteModel.updateOne({ id }, { $pull: { bookmarks: userId } }).exec();
+    return serverResponse(null, 'Apunte quitado de guardados exitosamente');
+  }
+
+  async search(query: string, userId: number) {
+    const subjects = await this.subjectsService.findAll(userId);
+    const subjectIds = subjects.data.map((subject) => subject.id);
+    const term = query.toLocaleLowerCase();
+    const notes = await this.noteModel.find({ subjectId: { $in: subjectIds } }).sort({ createdAt: -1 }).exec();
+    return notes.map((note) => this.toResponse(note, userId)).filter((note) =>
+      `${note.title} ${note.authorName}`.toLocaleLowerCase().includes(term),
+    );
+  }
+
+  private async findRecord(id: string) {
+    const note = await this.noteModel.findOne({ id }).exec();
     if (!note) throw new NotFoundException('El apunte solicitado no existe');
     return note;
   }
-  private ensureSubject(id: string) {
-    if (!['subj_101', 'subj_102', 'subj_103'].includes(id))
-      throw new NotFoundException('La materia solicitada no existe');
+
+  private ensureOwner(note: Note, userId: number) {
+    if (note.authorId !== userId) throw new ForbiddenException('El apunte no pertenece al estudiante autenticado');
   }
-  private ensureOwner(note: NoteRecord, userId: string) {
-    if (note.authorId !== userId)
-      throw new ForbiddenException(
-        'El apunte no pertenece al estudiante autenticado',
-      );
-  }
+
   private validate(dto: CreateNoteDto) {
-    if (!dto?.title?.trim() || !dto?.fileUrl?.trim())
-      throw new BadRequestException(
-        'El título y la URL del archivo son obligatorios',
-      );
+    if (!dto?.title?.trim() || !dto.fileName?.trim() || !dto.fileData) {
+      throw new BadRequestException('El título y el archivo PDF son obligatorios');
+    }
+    if (!dto.fileName.toLocaleLowerCase().endsWith('.pdf')) throw new BadRequestException('El archivo debe ser PDF');
+    const encoded = dto.fileData.replace(/^data:application\/pdf;base64,/, '');
+    const buffer = Buffer.from(encoded, 'base64');
+    if (buffer.length > 10 * 1024 * 1024) throw new BadRequestException('El PDF no puede superar 10 MB');
+    if (buffer.length < 5 || buffer.subarray(0, 5).toString() !== '%PDF-') throw new BadRequestException('El archivo no parece ser un PDF válido');
+    return buffer.toString('base64');
   }
-  private toResponse(note: NoteRecord, userId: string) {
-    const { ratings: _ratings, bookmarks, ...data } = note;
-    return { ...data, bookmarked: bookmarks.has(userId) };
+
+  private toResponse(note: Note, userId: number) {
+    const ratings = note.ratings.map((rating) => rating.stars);
+    const averageRating = ratings.length
+      ? Math.round((ratings.reduce((sum, stars) => sum + stars, 0) / ratings.length) * 10) / 10
+      : 0;
+    return {
+      id: note.id,
+      subjectId: note.subjectId,
+      authorId: String(note.authorId),
+      authorName: note.authorName,
+      title: note.title,
+      fileName: note.fileName,
+      fileUrl: `/notes/${note.id}/file`,
+      averageRating,
+      ratingsCount: ratings.length,
+      myRating: note.ratings.find((rating) => rating.userId === userId)?.stars ?? 0,
+      featured: averageRating >= 4,
+      createdAt: note.createdAt,
+      bookmarked: note.bookmarks.includes(userId),
+    };
   }
 }

@@ -12,36 +12,34 @@ import { AuthGuard } from '../auth/auth.guard.js';
 import { ChatsService } from './chats.service.js';
 import { MessageQueryDto } from './dto/message-query.dto.js';
 import { SendMessageDto } from './dto/send-message.dto.js';
-import { CreateChatDto } from './dto/create-chat.dto.js';
 
-interface AuthenticatedRequest {
-  user: { id: number };
-}
+interface AuthenticatedRequest { user: { id: number }; }
 
 @Controller('chats')
 @UseGuards(AuthGuard)
 export class ChatsController {
   constructor(private readonly chatsService: ChatsService) {}
 
-  @Post()
-  createChat(@Body() dto: CreateChatDto) {
-    return this.chatsService.createChat(dto);
+  @Get()
+  findAll(@Req() request: AuthenticatedRequest) {
+    return this.chatsService.findAll(request.user.id);
   }
 
-  @Get() findAll() {
-    return this.chatsService.findAll();
-  }
-  @Get(':chatId/messages') findMessages(
+  @Get(':chatId/messages')
+  findMessages(
     @Param('chatId') chatId: string,
+    @Req() request: AuthenticatedRequest,
     @Query() query: MessageQueryDto,
   ) {
-    return this.chatsService.findMessages(chatId, query);
+    return this.chatsService.findMessages(chatId, request.user.id, query);
   }
-  @Post(':chatId/messages') createMessage(
+
+  @Post(':chatId/messages')
+  createMessage(
     @Param('chatId') chatId: string,
     @Req() request: AuthenticatedRequest,
     @Body() dto: SendMessageDto,
   ) {
-    return this.chatsService.createMessage(chatId, String(request.user.id), dto);
+    return this.chatsService.createMessage(chatId, request.user.id, dto);
   }
 }

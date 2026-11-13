@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { serverResponse } from '../server-response.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
@@ -34,14 +34,15 @@ export class AuthService {
       id,
       name: dto.name.trim(),
       email,
-      career: dto.career.trim(),
-      semester: dto.semester,
+      role: dto.role,
+      career: dto.role === 'student' ? dto.career!.trim() : '',
+      semester: dto.role === 'student' ? dto.semester! : null,
       avatarUrl: null,
       points: 0,
       notesCount: 0,
       passwordHash: this.hashPassword(dto.password),
     });
-    return serverResponse(this.toPublicUser(user), 'Usuario creado exitosamente', 201);
+    return serverResponse(this.authPayload(user), 'Usuario creado exitosamente', 201);
   }
 
   async login(dto: LoginDto) {
@@ -53,7 +54,29 @@ export class AuthService {
     if (!user || !this.verifyPassword(dto.password, user.passwordHash)) {
       throw new UnauthorizedException('Correo o contraseña incorrectos');
     }
-    return serverResponse(this.toPublicUser(user), 'Inicio de sesión exitoso');
+    return serverResponse(this.authPayload(user), 'Inicio de sesión exitoso');
+  }
+
+  async verifyAccessToken(token: string): Promise<number> {
+    const [payload, signature, extra] = token.split('.');
+    if (!payload || !signature || extra) throw new UnauthorizedException('Token de acceso inválido');
+    const expected = this.sign(payload);
+    const actualBytes = Buffer.from(signature);
+    const expectedBytes = Buffer.from(expected);
+    if (actualBytes.length !== expectedBytes.length || !timingSafeEqual(actualBytes, expectedBytes)) {
+      throw new UnauthorizedException('Token de acceso inválido');
+    }
+    try {
+      const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString()) as { id?: number; exp?: number };
+      if (!Number.isInteger(decoded.id) || !decoded.exp || decoded.exp <= Date.now()) {
+        throw new UnauthorizedException('La sesión expiró');
+      }
+      await this.findUser(decoded.id!);
+      return decoded.id!;
+    } catch (cause) {
+      if (cause instanceof UnauthorizedException) throw cause;
+      throw new UnauthorizedException('Token de acceso inválido');
+    }
   }
 
   async findUser(id: number) {
@@ -88,6 +111,11 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('Usuario no válido');
   }
 
+  async addRatingPoints(id: number, points: number) {
+    if (points === 0) return;
+    await this.userModel.updateOne({ id }, { $inc: { points } }).exec();
+  }
+
   async getRanking(limit: number) {
     const users = await this.userModel
       .find()
@@ -115,7 +143,7 @@ export class AuthService {
     }
     if (
       changes.semester !== undefined &&
-      (!Number.isInteger(changes.semester) || changes.semester < 1)
+      (changes.semester === null || !Number.isInteger(changes.semester) || changes.semester < 1)
     ) {
       throw new BadRequestException('El semestre debe ser un entero positivo');
     }
@@ -134,17 +162,20 @@ export class AuthService {
   }
 
   private validateRegister(dto: RegisterDto): void {
-    if (!dto.name?.trim() || !dto.career?.trim()) {
-      throw new BadRequestException('Nombre y carrera son obligatorios');
+    if (!dto.name?.trim()) {
+      throw new BadRequestException('El nombre es obligatorio');
+    }
+    if (!['student', 'professor'].includes(dto.role)) {
+      throw new BadRequestException('Selecciona si la cuenta es de estudiante o profesor');
+    }
+    if (dto.role === 'student' && (!dto.career?.trim() || !Number.isInteger(dto.semester) || dto.semester! < 1)) {
+      throw new BadRequestException('Los estudiantes deben indicar carrera y semestre');
     }
     if (!this.isInstitutionalEmail(dto.email)) {
       throw new BadRequestException('Se requiere un correo institucional @javerianacali.edu.co');
     }
     if (!dto.password || dto.password.length < 8) {
       throw new BadRequestException('La contraseña debe tener al menos 8 caracteres');
-    }
-    if (!Number.isInteger(dto.semester) || dto.semester < 1) {
-      throw new BadRequestException('El semestre debe ser un entero positivo');
     }
   }
 
@@ -175,6 +206,7 @@ export class AuthService {
     return {
       id: user.id,
       name: user.name,
+      role: user.role ?? 'student',
       email: user.email,
       career: user.career,
       semester: user.semester,
@@ -182,5 +214,15 @@ export class AuthService {
       points: user.points,
       notesCount: user.notesCount,
     };
+  }
+
+  private authPayload(user: User) {
+    const payload = Buffer.from(JSON.stringify({ id: user.id, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 })).toString('base64url');
+    return { user: this.toPublicUser(user), accessToken: `${payload}.${this.sign(payload)}` };
+  }
+
+  private sign(value: string) {
+    const secret = process.env.AUTH_TOKEN_SECRET ?? 'conectate-jave-development-secret-change-me';
+    return createHmac('sha256', secret).update(value).digest('base64url');
   }
 }

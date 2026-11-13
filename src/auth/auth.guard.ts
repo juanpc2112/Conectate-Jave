@@ -12,14 +12,20 @@ export class AuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<{
-      headers: { 'x-user-id'?: string };
+      headers: { authorization?: string };
       user?: { id: number };
     }>();
-    const id = Number(request.headers['x-user-id']);
-    if (!Number.isInteger(id) || id < 1) {
-      throw new UnauthorizedException('Se requiere el encabezado x-user-id con el ID del usuario');
+    const authorization = request.headers.authorization;
+    const token = authorization?.startsWith('Bearer ')
+      ? authorization.slice('Bearer '.length).trim()
+      : '';
+    if (!token) throw new UnauthorizedException('Se requiere un token de acceso');
+    let id: number;
+    try {
+      id = await this.authService.verifyAccessToken(token);
+    } catch {
+      throw new UnauthorizedException('Token de acceso inválido o expirado');
     }
-    await this.authService.findUser(id);
     request.user = { id };
     return true;
   }

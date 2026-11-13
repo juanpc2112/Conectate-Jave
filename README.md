@@ -33,15 +33,21 @@ $ npm install
 
 ## Acceso a rutas protegidas
 
-El registro y el inicio de sesión devuelven el usuario con su ID. Para llamar una ruta protegida, envía su ID en el encabezado `x-user-id`. Por ejemplo, si el usuario tiene ID `1`, usa `x-user-id: 1`.
+El registro y el inicio de sesión devuelven el usuario y un token de acceso firmado, válido por siete días. Para llamar una ruta protegida, envía `Authorization: Bearer <accessToken>`.
 
-Para eliminar la cuenta identificada por ese encabezado, envía `DELETE http://localhost:3000/api/v1/users/me`.
+Para eliminar la cuenta actual, envía `DELETE http://localhost:3000/api/v1/users/me` con el mismo encabezado de autorización.
 
-Esta forma sirve para practicar, pero no comprueba la identidad de quien envía el ID. No se debe usar en una aplicación publicada.
+Configura `AUTH_TOKEN_SECRET` con un secreto propio para cualquier despliegue; el valor predeterminado solo sirve para desarrollo local.
 
 ## MongoDB
 
-Los usuarios se guardan en MongoDB. Por defecto, el proyecto se conecta a `mongodb://127.0.0.1:27017/conectate_jave`; asegúrate de que MongoDB esté iniciado antes de ejecutar el backend. Para usar otra dirección, configura la variable de entorno `MONGODB_URI`.
+Los usuarios, las clases, los mensajes de chat y los apuntes se guardan en MongoDB. Por defecto, el proyecto se conecta a `mongodb://127.0.0.1:27017/conectate_jave`; asegúrate de que MongoDB esté iniciado antes de ejecutar el backend. Para usar otra dirección, configura la variable de entorno `MONGODB_URI`.
+
+## Roles, clases y apuntes
+
+Al registrarse se elige el rol de estudiante o profesor. El profesor crea una clase desde `POST /api/v1/subjects`; la respuesta incluye un código de seis caracteres para compartir. El estudiante se une con `POST /api/v1/subjects/join` y ese vínculo le permite ver el chat y los apuntes de la clase.
+
+Los apuntes se suben como PDF en `POST /api/v1/subjects/:subjectId/notes` usando `title`, `fileName` y `fileData` (Data URL base64). Se admiten archivos de hasta 10 MB y el backend valida la firma PDF. Cada integrante puede calificar un apunte de 1 a 5 estrellas; la calificación del mismo integrante se actualiza y los puntos del autor cambian por la diferencia de estrellas. Los archivos PDF se guardan dentro del documento de apunte en MongoDB.
 
 ## Compile and run the project
 

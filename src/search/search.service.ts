@@ -10,25 +10,22 @@ export class SearchService {
     private readonly chatsService: ChatsService,
     private readonly notesService: NotesService,
   ) {}
-  search(dto: SearchQueryDto, userId: string) {
-    const q = dto.q?.trim();
+
+  async search(dto: SearchQueryDto, userId: number) {
+    const query = dto.q?.trim();
     const type = dto.type ?? 'all';
-    if (!q) throw new BadRequestException('El parámetro q es obligatorio');
-    if (!['chats', 'notes', 'all'].includes(type))
+    if (!query) throw new BadRequestException('El parámetro q es obligatorio');
+    if (!['chats', 'notes', 'all'].includes(type)) {
       throw new BadRequestException('type debe ser chats, notes o all');
-    const term = q.toLocaleLowerCase();
+    }
+    const term = query.toLocaleLowerCase();
+    const chatsResult = type === 'notes' ? null : await this.chatsService.findAll(userId);
+    const notes = type === 'chats' ? [] : await this.notesService.search(term, userId);
     return serverResponse({
-      chats:
-        type === 'notes'
-          ? []
-          : this.chatsService
-              .findAll().data
-              .filter((chat) =>
-                `${chat.subjectName} ${chat.professor}`
-                  .toLocaleLowerCase()
-                  .includes(term),
-              ),
-      notes: type === 'chats' ? [] : this.notesService.search(term, userId),
+      chats: chatsResult?.data.filter((chat) =>
+        `${chat.subjectName} ${chat.professor}`.toLocaleLowerCase().includes(term),
+      ) ?? [],
+      notes,
     }, 'Búsqueda realizada exitosamente');
   }
 }
