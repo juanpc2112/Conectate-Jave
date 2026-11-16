@@ -48,6 +48,13 @@ export class ChatsService {
   }
 
   private publicMessage(message: { id: string; senderId: number; senderRole: 'student' | 'professor'; text: string; sentAt: Date; read: boolean }) {
-    return { ...message, senderId: String(message.senderId), sentAt: message.sentAt.toISOString() };
+    return {
+      id: message.id,
+      senderId: String(message.senderId),
+      senderRole: message.senderRole,
+      text: message.text,
+      sentAt: message.sentAt.toISOString(),
+      read: message.read,
+    };
   }
 }
