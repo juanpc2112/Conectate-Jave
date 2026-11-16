@@ -85,6 +85,20 @@ export class AuthService {
     return user;
   }
 
+  async getNamesByIds(ids: number[]) {
+    if (ids.length === 0) return new Map<number, string>();
+
+    const users = await this.userModel
+      .find({ id: { $in: ids } })
+      .select({ id: 1, name: 1 })
+      .lean()
+      .exec();
+
+    return new Map<number, string>(
+      users.map((user): [number, string] => [user.id, user.name]),
+    );
+  }
+
   async getPublicUser(id: number) {
     return serverResponse(
       this.toPublicUser(await this.findUser(id)),

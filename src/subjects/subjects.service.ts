@@ -79,6 +79,7 @@ export class SubjectsService {
     const message = {
       id: `msg_${randomUUID()}`,
       senderId: userId,
+      senderName: user.name,
       senderRole: user.role,
       text: text.trim(),
       sentAt: new Date(),

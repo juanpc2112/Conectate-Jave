@@ -4,6 +4,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 export class StoredMessage {
   @Prop({ required: true }) id!: string;
   @Prop({ required: true }) senderId!: number;
+  @Prop({ default: '' }) senderName!: string;
   @Prop({ required: true, enum: ['student', 'professor'] })
   senderRole!: 'student' | 'professor';
   @Prop({ required: true }) text!: string;
